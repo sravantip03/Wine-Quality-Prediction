@@ -1,0 +1,249 @@
+{% extends 'predictor/base.html' %}
+{% block title %}VinoAI – Wine Quality Prediction{% endblock %}
+
+{% block extra_head %}
+<style>
+  .hero {
+    min-height: 88vh;
+    display: flex; flex-direction: column; justify-content: center;
+    position: relative; overflow: hidden;
+    padding: 4rem 2rem;
+  }
+  .hero-bg {
+    position: absolute; inset: 0; z-index: 0;
+    background:
+      radial-gradient(ellipse 80% 60% at 70% 40%, rgba(123,28,46,0.18) 0%, transparent 70%),
+      radial-gradient(ellipse 50% 50% at 20% 80%, rgba(201,168,76,0.08) 0%, transparent 60%),
+      var(--bg);
+  }
+  .hero-content { position: relative; z-index: 1; max-width: 680px; }
+  .hero-badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: rgba(201,168,76,0.1); border: 1px solid rgba(201,168,76,0.3);
+    color: var(--gold); padding: 0.4rem 1rem; border-radius: 20px;
+    font-size: 0.78rem; font-weight: 600; letter-spacing: 0.08em;
+    text-transform: uppercase; margin-bottom: 1.5rem;
+  }
+  .hero-title {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(2.8rem, 6vw, 4.5rem);
+    font-weight: 700; line-height: 1.1;
+    color: var(--text);
+    margin-bottom: 1.25rem;
+  }
+  .hero-title span {
+    background: linear-gradient(135deg, var(--wine-light), var(--gold));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .hero-subtitle {
+    font-size: 1.1rem; color: var(--text2); line-height: 1.7;
+    max-width: 520px; margin-bottom: 2rem;
+  }
+  .hero-cta { display: flex; gap: 1rem; flex-wrap: wrap; }
+
+  /* Floating wine glass decoration */
+  .hero-decoration {
+    position: absolute; right: 5%; top: 50%; transform: translateY(-50%);
+    font-size: clamp(6rem, 14vw, 12rem);
+    opacity: 0.06; z-index: 0;
+    pointer-events: none;
+    animation: float 6s ease-in-out infinite;
+  }
+  @keyframes float {
+    0%,100% { transform: translateY(-50%) rotate(-5deg); }
+    50%      { transform: translateY(-55%) rotate(5deg); }
+  }
+
+  /* Stats strip */
+  .stats-strip {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 1px; background: var(--border);
+    border: 1px solid var(--border); border-radius: var(--radius-lg);
+    overflow: hidden; margin-bottom: 3rem;
+  }
+  .stat-item {
+    background: var(--surface); padding: 1.5rem;
+    display: flex; flex-direction: column; gap: 4px;
+    transition: background 0.2s;
+  }
+  .stat-item:hover { background: var(--surface2); }
+  .stat-value {
+    font-family: 'Playfair Display', serif;
+    font-size: 2rem; font-weight: 700; color: var(--gold);
+    line-height: 1;
+  }
+  .stat-label { font-size: 0.78rem; color: var(--text3); font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; }
+
+  /* Feature cards */
+  .features-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem; margin-bottom: 3rem; }
+  .feature-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); padding: 1.75rem;
+    transition: all 0.3s;
+    position: relative; overflow: hidden;
+  }
+  .feature-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, var(--wine), var(--gold));
+    opacity: 0; transition: opacity 0.3s;
+  }
+  .feature-card:hover { transform: translateY(-4px); box-shadow: 0 12px 40px rgba(0,0,0,0.4); }
+  .feature-card:hover::before { opacity: 1; }
+  .feature-icon { font-size: 2rem; margin-bottom: 1rem; }
+  .feature-title { font-family: 'Playfair Display', serif; font-size: 1.1rem; color: var(--text); margin-bottom: 0.5rem; }
+  .feature-desc { font-size: 0.85rem; color: var(--text2); line-height: 1.6; }
+
+  /* Recent predictions */
+  .recent-table { width: 100%; border-collapse: collapse; }
+  .recent-table th {
+    font-size: 0.72rem; font-weight: 600; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--text3);
+    padding: 0.75rem 1rem; text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  .recent-table td {
+    padding: 0.85rem 1rem; font-size: 0.875rem;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    color: var(--text2);
+  }
+  .recent-table tr:hover td { background: rgba(255,255,255,0.02); color: var(--text); }
+  .recent-table tr:last-child td { border-bottom: none; }
+
+  @media(max-width:900px) {
+    .features-grid { grid-template-columns: 1fr 1fr; }
+    .stats-strip { grid-template-columns: 1fr 1fr; }
+    .hero-decoration { display: none; }
+  }
+  @media(max-width:600px) {
+    .features-grid { grid-template-columns: 1fr; }
+    .stats-strip { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-bg"></div>
+  <div class="hero-decoration">🍷</div>
+  <div class="page-wrapper" style="padding-top:0;padding-bottom:0;">
+    <div class="hero-content anim">
+      <div class="hero-badge">✨ Machine Learning · Random Forest · Django</div>
+      <h1 class="hero-title">Predict Wine<br/>Quality with <span>AI</span></h1>
+      <p class="hero-subtitle">
+        Enter 11 physicochemical properties of red wine and let our trained Random Forest model
+        instantly predict its quality grade — from Poor to Excellent.
+      </p>
+      <div class="hero-cta">
+        <a href="{% url 'predict' %}" class="btn btn-gold">🍷 Analyse a Wine</a>
+        <a href="{% url 'dashboard' %}" class="btn btn-outline">📊 View Dashboard</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="page-wrapper">
+
+  <!-- Stats strip -->
+  <div class="stats-strip anim anim-1">
+    <div class="stat-item">
+      <span class="stat-value">{{ acc_pct }}%</span>
+      <span class="stat-label">Model Accuracy</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-value">{{ cv_pct }}%</span>
+      <span class="stat-label">CV Score</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-value">{{ meta.dataset_stats.total_samples }}</span>
+      <span class="stat-label">Training Samples</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-value">{{ total }}</span>
+      <span class="stat-label">Predictions Made</span>
+    </div>
+  </div>
+
+  <!-- Feature cards -->
+  <div class="section-header anim anim-2">
+    <h1>How It Works</h1>
+    <div class="gold-line"></div>
+  </div>
+  <div class="features-grid anim anim-2">
+    <div class="feature-card">
+      <div class="feature-icon">🧪</div>
+      <div class="feature-title">Input 11 Features</div>
+      <div class="feature-desc">Enter physicochemical properties like acidity, alcohol content, sulphates, and more from a wine lab report.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🌲</div>
+      <div class="feature-title">Random Forest Model</div>
+      <div class="feature-desc">200 decision trees trained on real UCI Wine Dataset. Feature importances reveal what matters most.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🏆</div>
+      <div class="feature-title">Instant Grade Prediction</div>
+      <div class="feature-desc">Get a quality grade from Poor to Excellent with confidence scores and full probability breakdown.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">📊</div>
+      <div class="feature-title">Live Dashboard</div>
+      <div class="feature-desc">Track all predictions with charts, feature importance visualizations, and grade distributions.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🔗</div>
+      <div class="feature-title">REST API</div>
+      <div class="feature-desc">Use the <code style="color:var(--gold)">/api/predict/</code> endpoint to integrate predictions into any application.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🗂️</div>
+      <div class="feature-title">Prediction History</div>
+      <div class="feature-desc">Every prediction is stored in the database. Filter by grade, review past analyses any time.</div>
+    </div>
+  </div>
+
+  <!-- Recent predictions -->
+  {% if recent %}
+  <div class="card anim anim-3">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;">
+      <h2 style="font-family:'Playfair Display',serif;font-size:1.3rem;">Recent Predictions</h2>
+      <a href="{% url 'history' %}" class="btn btn-outline btn-sm">View All →</a>
+    </div>
+    <table class="recent-table">
+      <thead>
+        <tr>
+          <th>Wine</th>
+          <th>Grade</th>
+          <th>Confidence</th>
+          <th>Alcohol</th>
+          <th>Date</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in recent %}
+        <tr>
+          <td style="color:var(--text);">{{ p.wine_name }}</td>
+          <td>
+            <span class="badge badge-{% if p.predicted_grade == 'Poor' %}poor{% elif p.predicted_grade == 'Below Average' %}below{% elif p.predicted_grade == 'Average' %}average{% elif p.predicted_grade == 'Good' %}good{% else %}excellent{% endif %}">
+              {{ p.grade_emoji }} {{ p.predicted_grade }}
+            </span>
+          </td>
+          <td>{{ p.confidence }}%</td>
+          <td>{{ p.alcohol }}%</td>
+          <td>{{ p.created_at|date:"M d, H:i" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="card anim anim-3" style="text-align:center;padding:3rem;">
+    <div style="font-size:3rem;margin-bottom:1rem;">🍷</div>
+    <p style="color:var(--text2);margin-bottom:1.5rem;">No predictions yet. Analyse your first wine!</p>
+    <a href="{% url 'predict' %}" class="btn btn-gold">Start Predicting</a>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

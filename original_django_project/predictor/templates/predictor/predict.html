@@ -1,0 +1,354 @@
+{% extends 'predictor/base.html' %}
+{% block title %}Predict Wine Quality – VinoAI{% endblock %}
+
+{% block extra_head %}
+<style>
+  .predict-layout {
+    display: grid; grid-template-columns: 1fr 340px; gap: 1.75rem;
+    align-items: start;
+  }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.1rem; }
+
+  /* Feature input with slider */
+  .feature-input-group {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1rem 1.1rem;
+    transition: border-color 0.2s;
+    position: relative;
+  }
+  .feature-input-group:hover { border-color: rgba(201,168,76,0.3); }
+  .feature-input-group:focus-within { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(201,168,76,0.1); }
+
+  .feat-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem; }
+  .feat-label { font-size: 0.75rem; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 0.05em; }
+  .feat-icon { font-size: 1rem; }
+  .feat-unit { font-size: 0.7rem; color: var(--text3); }
+
+  .feat-row { display: flex; align-items: center; gap: 10px; }
+  .feat-row input[type="number"] {
+    background: transparent; border: none; outline: none;
+    color: var(--text); font-family: 'Playfair Display', serif;
+    font-size: 1.25rem; font-weight: 700; width: 90px;
+    padding: 0;
+  }
+  .feat-row input[type="number"]::-webkit-inner-spin-button,
+  .feat-row input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; }
+
+  .feat-slider {
+    -webkit-appearance: none; appearance: none;
+    flex: 1; height: 4px; border-radius: 2px;
+    background: var(--surface2); outline: none; cursor: pointer;
+    transition: background 0.2s;
+  }
+  .feat-slider::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--gold); cursor: pointer;
+    box-shadow: 0 0 6px rgba(201,168,76,0.5);
+    transition: transform 0.15s;
+  }
+  .feat-slider::-webkit-slider-thumb:hover { transform: scale(1.3); }
+  .feat-help { font-size: 0.7rem; color: var(--text3); margin-top: 0.4rem; }
+
+  /* Sidebar */
+  .sidebar-card { position: sticky; top: 84px; }
+  .preset-btn {
+    width: 100%; text-align: left;
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 0.85rem 1rem;
+    color: var(--text2); font-family: 'DM Sans', sans-serif;
+    font-size: 0.85rem; cursor: pointer;
+    transition: all 0.2s;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .preset-btn:hover { background: var(--surface2); border-color: var(--gold); color: var(--gold); }
+  .preset-emoji { font-size: 1.1rem; }
+  .preset-name { font-weight: 600; }
+  .preset-desc { font-size: 0.72rem; color: var(--text3); display: block; margin-top: 2px; }
+
+  /* Wine name input */
+  .wine-name-wrap { margin-bottom: 1.5rem; }
+
+  .submit-btn-wrap { margin-top: 2rem; display: flex; gap: 1rem; align-items: center; }
+
+  /* Loading overlay */
+  .loading-overlay {
+    display: none; position: fixed; inset: 0; z-index: 999;
+    background: rgba(14,11,12,0.9);
+    align-items: center; justify-content: center;
+    flex-direction: column; gap: 1.5rem;
+  }
+  .loading-overlay.show { display: flex; }
+  .loader {
+    width: 60px; height: 60px; border-radius: 50%;
+    border: 3px solid var(--border);
+    border-top-color: var(--gold);
+    animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-text { font-family: 'Playfair Display', serif; font-size: 1.2rem; color: var(--text2); }
+
+  @media(max-width:1024px) { .predict-layout { grid-template-columns: 1fr; } .sidebar-card { position: static; } }
+  @media(max-width:680px)  { .form-grid { grid-template-columns: 1fr; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-wrapper">
+  <div class="section-header anim">
+    <h1>🍷 Wine Analysis</h1>
+    <div class="gold-line"></div>
+    <p>Enter the physicochemical properties below to predict wine quality.</p>
+  </div>
+
+  <div class="predict-layout">
+    <!-- MAIN FORM -->
+    <div class="anim anim-1">
+      <form method="POST" id="predictForm">
+        {% csrf_token %}
+
+        <!-- Wine name -->
+        <div class="card wine-name-wrap">
+          <div class="form-group">
+            <label class="form-label">Wine / Sample Name</label>
+            <input type="text" name="wine_name" class="form-input"
+                   placeholder="e.g. Cabernet Sauvignon 2024" maxlength="100"/>
+          </div>
+        </div>
+
+        <!-- Feature inputs -->
+        <div class="card" style="margin-bottom:1.25rem;">
+          <h3 style="font-family:'Playfair Display',serif;font-size:1.1rem;margin-bottom:1.25rem;color:var(--text2);">
+            Acidity &amp; pH Parameters
+          </h3>
+          <div class="form-grid">
+            {% for feat in features %}
+              {% if feat.name == 'fixed_acidity' or feat.name == 'volatile_acidity' or feat.name == 'citric_acid' or feat.name == 'ph' %}
+              <div class="feature-input-group">
+                <div class="feat-top">
+                  <span class="feat-label">{{ feat.label }}</span>
+                  <span class="feat-icon">{{ feat.icon }}</span>
+                </div>
+                <div class="feat-row">
+                  <input type="number"
+                         id="num_{{ feat.name }}" name="{{ feat.name }}"
+                         value="{{ feat.default }}"
+                         min="{{ feat.min }}" max="{{ feat.max }}" step="{{ feat.step }}"
+                         required/>
+                  <input type="range" class="feat-slider"
+                         id="range_{{ feat.name }}"
+                         min="{{ feat.min }}" max="{{ feat.max }}" step="{{ feat.step }}"
+                         value="{{ feat.default }}"/>
+                </div>
+                {% if feat.unit %}<div class="feat-unit">{{ feat.unit }}</div>{% endif %}
+                <div class="feat-help">{{ feat.help }}</div>
+              </div>
+              {% endif %}
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom:1.25rem;">
+          <h3 style="font-family:'Playfair Display',serif;font-size:1.1rem;margin-bottom:1.25rem;color:var(--text2);">
+            Sugar, Salts &amp; Sulphur
+          </h3>
+          <div class="form-grid">
+            {% for feat in features %}
+              {% if feat.name == 'residual_sugar' or feat.name == 'chlorides' or feat.name == 'free_sulfur_dioxide' or feat.name == 'total_sulfur_dioxide' or feat.name == 'sulphates' %}
+              <div class="feature-input-group">
+                <div class="feat-top">
+                  <span class="feat-label">{{ feat.label }}</span>
+                  <span class="feat-icon">{{ feat.icon }}</span>
+                </div>
+                <div class="feat-row">
+                  <input type="number"
+                         id="num_{{ feat.name }}" name="{{ feat.name }}"
+                         value="{{ feat.default }}"
+                         min="{{ feat.min }}" max="{{ feat.max }}" step="{{ feat.step }}"
+                         required/>
+                  <input type="range" class="feat-slider"
+                         id="range_{{ feat.name }}"
+                         min="{{ feat.min }}" max="{{ feat.max }}" step="{{ feat.step }}"
+                         value="{{ feat.default }}"/>
+                </div>
+                {% if feat.unit %}<div class="feat-unit">{{ feat.unit }}</div>{% endif %}
+                <div class="feat-help">{{ feat.help }}</div>
+              </div>
+              {% endif %}
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom:1.25rem;">
+          <h3 style="font-family:'Playfair Display',serif;font-size:1.1rem;margin-bottom:1.25rem;color:var(--text2);">
+            Density &amp; Alcohol
+          </h3>
+          <div class="form-grid">
+            {% for feat in features %}
+              {% if feat.name == 'density' or feat.name == 'alcohol' %}
+              <div class="feature-input-group">
+                <div class="feat-top">
+                  <span class="feat-label">{{ feat.label }}</span>
+                  <span class="feat-icon">{{ feat.icon }}</span>
+                </div>
+                <div class="feat-row">
+                  <input type="number"
+                         id="num_{{ feat.name }}" name="{{ feat.name }}"
+                         value="{{ feat.default }}"
+                         min="{{ feat.min }}" max="{{ feat.max }}" step="{{ feat.step }}"
+                         required/>
+                  <input type="range" class="feat-slider"
+                         id="range_{{ feat.name }}"
+                         min="{{ feat.min }}" max="{{ feat.max }}" step="{{ feat.step }}"
+                         value="{{ feat.default }}"/>
+                </div>
+                {% if feat.unit %}<div class="feat-unit">{{ feat.unit }}</div>{% endif %}
+                <div class="feat-help">{{ feat.help }}</div>
+              </div>
+              {% endif %}
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="submit-btn-wrap">
+          <button type="submit" class="btn btn-gold" style="font-size:1rem;padding:0.85rem 2.5rem;">
+            🔮 Predict Quality
+          </button>
+          <button type="button" class="btn btn-outline" onclick="resetForm()">↺ Reset</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- SIDEBAR -->
+    <div class="sidebar-card anim anim-2">
+      <div class="card">
+        <h3 style="font-family:'Playfair Display',serif;font-size:1.05rem;margin-bottom:1rem;">Quick Presets</h3>
+        <p style="font-size:0.78rem;color:var(--text3);margin-bottom:1rem;">Load example wine profiles:</p>
+        <div style="display:flex;flex-direction:column;gap:0.6rem;">
+          <button class="preset-btn" onclick="loadPreset('excellent')">
+            <span class="preset-emoji">🏆</span>
+            <div>
+              <span class="preset-name">Premium Reserve</span>
+              <span class="preset-desc">High alcohol, low volatile acidity</span>
+            </div>
+          </button>
+          <button class="preset-btn" onclick="loadPreset('good')">
+            <span class="preset-emoji">😊</span>
+            <div>
+              <span class="preset-name">Table Wine</span>
+              <span class="preset-desc">Balanced, everyday good quality</span>
+            </div>
+          </button>
+          <button class="preset-btn" onclick="loadPreset('average')">
+            <span class="preset-emoji">🙂</span>
+            <div>
+              <span class="preset-name">House Wine</span>
+              <span class="preset-desc">Average quality profile</span>
+            </div>
+          </button>
+          <button class="preset-btn" onclick="loadPreset('poor')">
+            <span class="preset-emoji">😞</span>
+            <div>
+              <span class="preset-name">Low Grade Sample</span>
+              <span class="preset-desc">High volatile acidity, low alcohol</span>
+            </div>
+          </button>
+        </div>
+
+        <hr class="divider"/>
+
+        <h3 style="font-family:'Playfair Display',serif;font-size:1.05rem;margin-bottom:0.75rem;">Model Info</h3>
+        <div style="display:flex;flex-direction:column;gap:0.6rem;">
+          <div style="display:flex;justify-content:space-between;font-size:0.82rem;">
+            <span style="color:var(--text3);">Algorithm</span>
+            <span style="color:var(--text);">Random Forest</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:0.82rem;">
+            <span style="color:var(--text3);">Trees</span>
+            <span style="color:var(--text);">200</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:0.82rem;">
+            <span style="color:var(--text3);">Accuracy</span>
+            <span style="color:var(--gold);">{{ meta.accuracy|floatformat:2 }}%</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:0.82rem;">
+            <span style="color:var(--text3);">CV Score</span>
+            <span style="color:var(--gold);">{{ meta.cv_mean|floatformat:2 }} ± {{ meta.cv_std|floatformat:2 }}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:0.82rem;">
+            <span style="color:var(--text3);">Features</span>
+            <span style="color:var(--text);">11</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:0.82rem;">
+            <span style="color:var(--text3);">Classes</span>
+            <span style="color:var(--text);">5 grades</span>
+          </div>
+        </div>
+
+        <hr class="divider"/>
+        <a href="{% url 'dashboard' %}" class="btn btn-outline btn-sm" style="width:100%;justify-content:center;">
+          📊 View Dashboard
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Loading overlay -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="loader"></div>
+  <div class="loading-text">Analysing wine profile…</div>
+</div>
+
+<script>
+  // Sync sliders <-> number inputs
+  document.querySelectorAll('.feat-slider').forEach(slider => {
+    const name = slider.id.replace('range_', '');
+    const numInput = document.getElementById('num_' + name);
+    slider.addEventListener('input', () => { numInput.value = slider.value; });
+    numInput.addEventListener('input', () => {
+      const v = parseFloat(numInput.value);
+      const mn = parseFloat(slider.min), mx = parseFloat(slider.max);
+      if (!isNaN(v) && v >= mn && v <= mx) slider.value = v;
+    });
+  });
+
+  // Presets
+  const PRESETS = {
+    excellent: { fixed_acidity:10.5, volatile_acidity:0.28, citric_acid:0.56,
+                 residual_sugar:2.0, chlorides:0.065, free_sulfur_dioxide:8,
+                 total_sulfur_dioxide:22, density:0.994, ph:3.12, sulphates:0.92, alcohol:13.5 },
+    good:      { fixed_acidity:9.2,  volatile_acidity:0.40, citric_acid:0.35,
+                 residual_sugar:2.5, chlorides:0.08,  free_sulfur_dioxide:14,
+                 total_sulfur_dioxide:40, density:0.996, ph:3.25, sulphates:0.75, alcohol:11.8 },
+    average:   { fixed_acidity:8.3,  volatile_acidity:0.52, citric_acid:0.27,
+                 residual_sugar:2.5, chlorides:0.087, free_sulfur_dioxide:16,
+                 total_sulfur_dioxide:46, density:0.9967, ph:3.31, sulphates:0.66, alcohol:10.4 },
+    poor:      { fixed_acidity:7.5,  volatile_acidity:0.85, citric_acid:0.10,
+                 residual_sugar:1.8, chlorides:0.14,  free_sulfur_dioxide:6,
+                 total_sulfur_dioxide:18, density:0.999, ph:3.55, sulphates:0.45, alcohol:9.0  },
+  };
+
+  function loadPreset(key) {
+    const p = PRESETS[key];
+    Object.entries(p).forEach(([name, val]) => {
+      const num = document.getElementById('num_' + name);
+      const rng = document.getElementById('range_' + name);
+      if (num) num.value = val;
+      if (rng) rng.value = val;
+    });
+  }
+
+  function resetForm() {
+    document.getElementById('predictForm').reset();
+    document.querySelectorAll('.feat-slider').forEach(s => {
+      s.value = document.getElementById('num_' + s.id.replace('range_','')).value;
+    });
+  }
+
+  // Show loading on submit
+  document.getElementById('predictForm').addEventListener('submit', () => {
+    document.getElementById('loadingOverlay').classList.add('show');
+  });
+</script>
+{% endblock %}
