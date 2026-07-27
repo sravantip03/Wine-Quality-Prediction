@@ -1,0 +1,122 @@
+{% extends 'predictor/base.html' %}
+{% block title %}History – VinoAI{% endblock %}
+
+{% block extra_head %}
+<style>
+  .history-header {
+    display: flex; align-items: flex-end; justify-content: space-between;
+    margin-bottom: 1.75rem; flex-wrap: wrap; gap: 1rem;
+  }
+  .filter-row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+  .filter-btn {
+    padding: 0.4rem 1rem; border-radius: 20px; font-size: 0.8rem; font-weight: 600;
+    text-decoration: none; border: 1px solid var(--border); color: var(--text3);
+    transition: all 0.2s; background: transparent;
+    cursor: pointer;
+  }
+  .filter-btn:hover, .filter-btn.active { color: var(--gold); border-color: var(--gold); background: rgba(201,168,76,0.08); }
+
+  .history-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.1rem; }
+  .pred-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); padding: 1.25rem;
+    transition: all 0.25s; position: relative;
+  }
+  .pred-card:hover { transform: translateY(-3px); box-shadow: 0 10px 36px rgba(0,0,0,0.4); border-color: rgba(201,168,76,0.25); }
+  .pred-card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem; }
+  .pred-grade-emoji { font-size: 1.6rem; }
+  .pred-delete {
+    background: none; border: none; color: var(--text3);
+    cursor: pointer; font-size: 0.9rem; padding: 4px 6px;
+    border-radius: 6px; transition: all 0.2s;
+    text-decoration: none;
+  }
+  .pred-delete:hover { color: #ff6b6b; background: rgba(231,76,60,0.1); }
+  .pred-name { font-family: 'Playfair Display', serif; font-size: 1rem; margin-bottom: 0.3rem; }
+  .pred-meta { font-size: 0.75rem; color: var(--text3); margin-bottom: 0.75rem; }
+  .pred-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; }
+  .pred-stat { background: var(--bg2); border-radius: 8px; padding: 0.5rem 0.6rem; }
+  .pred-stat-val { font-size: 0.9rem; font-weight: 700; color: var(--text); }
+  .pred-stat-lbl { font-size: 0.65rem; color: var(--text3); text-transform: uppercase; letter-spacing: 0.04em; }
+  .pred-confidence-bar {
+    height: 4px; background: var(--surface2); border-radius: 2px; overflow: hidden; margin-top: 0.75rem;
+  }
+  .pred-confidence-fill { height: 100%; border-radius: 2px; background: linear-gradient(90deg, var(--wine), var(--gold)); }
+
+  .empty-state { text-align: center; padding: 4rem 2rem; }
+  .empty-icon { font-size: 4rem; margin-bottom: 1rem; opacity: 0.5; }
+
+  @media(max-width:900px) { .history-grid { grid-template-columns: 1fr 1fr; } }
+  @media(max-width:580px) { .history-grid { grid-template-columns: 1fr; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-wrapper">
+  <div class="history-header anim">
+    <div class="section-header" style="margin-bottom:0;">
+      <h1>Prediction History</h1>
+      <div class="gold-line"></div>
+      <p>{{ total }} total prediction{{ total|pluralize }} recorded</p>
+    </div>
+    <div class="filter-row">
+      <a href="{% url 'history' %}" class="filter-btn {% if not grade_filter %}active{% endif %}">All</a>
+      {% for g in grade_labels %}
+      <a href="{% url 'history' %}?grade={{ g }}" class="filter-btn {% if grade_filter == g %}active{% endif %}">{{ g }}</a>
+      {% endfor %}
+    </div>
+  </div>
+
+  {% if predictions %}
+  <div class="history-grid anim anim-1">
+    {% for pred in predictions %}
+    <div class="pred-card">
+      <div class="pred-card-top">
+        <span class="pred-grade-emoji">{{ pred.grade_emoji }}</span>
+        <div style="display:flex;align-items:center;gap:0.5rem;">
+          <span class="badge badge-{% if pred.predicted_grade == 'Poor' %}poor{% elif pred.predicted_grade == 'Below Average' %}below{% elif pred.predicted_grade == 'Average' %}average{% elif pred.predicted_grade == 'Good' %}good{% else %}excellent{% endif %}">
+            {{ pred.predicted_grade }}
+          </span>
+          <a href="{% url 'delete_prediction' pred.pk %}"
+             class="pred-delete" title="Delete"
+             onclick="return confirm('Delete this prediction?')">✕</a>
+        </div>
+      </div>
+      <div class="pred-name">{{ pred.wine_name }}</div>
+      <div class="pred-meta">{{ pred.created_at|date:"M d, Y • H:i" }}</div>
+      <div class="pred-stats">
+        <div class="pred-stat">
+          <div class="pred-stat-val">{{ pred.predicted_quality }}</div>
+          <div class="pred-stat-lbl">Quality</div>
+        </div>
+        <div class="pred-stat">
+          <div class="pred-stat-val">{{ pred.confidence }}%</div>
+          <div class="pred-stat-lbl">Confidence</div>
+        </div>
+        <div class="pred-stat">
+          <div class="pred-stat-val">{{ pred.alcohol }}%</div>
+          <div class="pred-stat-lbl">Alcohol</div>
+        </div>
+        <div class="pred-stat">
+          <div class="pred-stat-val">{{ pred.ph }}</div>
+          <div class="pred-stat-lbl">pH</div>
+        </div>
+      </div>
+      <div class="pred-confidence-bar">
+        <div class="pred-confidence-fill" style="width:{{ pred.confidence }}%;"></div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card empty-state anim">
+    <div class="empty-icon">🍷</div>
+    <p style="color:var(--text2);font-size:1.1rem;margin-bottom:0.5rem;">
+      {% if grade_filter %}No {{ grade_filter }} predictions found.{% else %}No predictions yet.{% endif %}
+    </p>
+    <p style="color:var(--text3);font-size:0.875rem;margin-bottom:1.5rem;">Start analysing wines to build your history.</p>
+    <a href="{% url 'predict' %}" class="btn btn-gold">🍷 Make First Prediction</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,247 @@
+{% extends 'predictor/base.html' %}
+{% block title %}Result: {{ prediction.predicted_grade }} – VinoAI{% endblock %}
+
+{% block extra_head %}
+<style>
+  .result-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 1.75rem; }
+
+  /* Grade hero */
+  .grade-hero {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 2.5rem 2rem;
+    text-align: center;
+    position: relative; overflow: hidden;
+  }
+  .grade-hero::before {
+    content: ''; position: absolute; inset: 0;
+    background: radial-gradient(ellipse 80% 80% at 50% 0%,
+      rgba(201,168,76,0.12) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .grade-emoji-big { font-size: 4.5rem; display: block; margin-bottom: 0.75rem; animation: bounceIn 0.6s ease; }
+  @keyframes bounceIn {
+    0%   { transform: scale(0.5); opacity: 0; }
+    70%  { transform: scale(1.1); }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  .grade-label-big {
+    font-family: 'Playfair Display', serif;
+    font-size: 2.8rem; font-weight: 700;
+    line-height: 1; margin-bottom: 0.5rem;
+  }
+  .grade-sublabel { font-size: 0.9rem; color: var(--text3); margin-bottom: 1.5rem; }
+  .confidence-bar-wrap { margin: 1.5rem 0; }
+  .confidence-label { display: flex; justify-content: space-between; font-size: 0.78rem; color: var(--text3); margin-bottom: 6px; }
+  .confidence-bar {
+    height: 10px; background: var(--surface2); border-radius: 5px; overflow: hidden;
+  }
+  .confidence-fill {
+    height: 100%; border-radius: 5px;
+    background: linear-gradient(90deg, var(--wine), var(--gold));
+    transition: width 1s ease;
+  }
+  .quality-score-row {
+    display: flex; justify-content: center; gap: 2.5rem; margin-top: 1.5rem;
+  }
+  .qs-item { text-align: center; }
+  .qs-val { font-family: 'Playfair Display', serif; font-size: 1.8rem; color: var(--gold); }
+  .qs-lbl { font-size: 0.72rem; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; }
+
+  /* Probability chart card */
+  .proba-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.75rem; }
+
+  /* Feature summary */
+  .feat-summary-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.75rem; margin-top: 1rem; }
+  .feat-summary-item {
+    background: var(--bg2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 0.75rem 0.9rem;
+  }
+  .fsi-label { font-size: 0.68rem; color: var(--text3); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+  .fsi-value { font-size: 0.95rem; color: var(--text); font-weight: 600; }
+
+  /* Action buttons */
+  .action-row { display: flex; gap: 1rem; margin-top: 1.75rem; flex-wrap: wrap; }
+
+  @media(max-width: 900px) {
+    .result-layout { grid-template-columns: 1fr; }
+    .feat-summary-grid { grid-template-columns: 1fr 1fr; }
+  }
+  @media(max-width: 500px) { .feat-summary-grid { grid-template-columns: 1fr 1fr; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-wrapper">
+  <div class="section-header anim">
+    <h1>Prediction Result</h1>
+    <div class="gold-line"></div>
+    <p>Analysis complete for <strong>{{ prediction.wine_name }}</strong></p>
+  </div>
+
+  <div class="result-layout">
+    <!-- Grade result -->
+    <div class="anim anim-1">
+      <div class="grade-hero">
+        <span class="grade-emoji-big">{{ prediction.grade_emoji }}</span>
+        <div class="grade-label-big"
+             style="color:{{ prediction.grade_color }};">
+          {{ prediction.predicted_grade }}
+        </div>
+        <div class="grade-sublabel">Predicted Quality Grade</div>
+
+        <div class="confidence-bar-wrap">
+          <div class="confidence-label">
+            <span>Model Confidence</span>
+            <span style="color:var(--gold);font-weight:600;">{{ prediction.confidence }}%</span>
+          </div>
+          <div class="confidence-bar">
+            <div class="confidence-fill" style="width:{{ prediction.confidence }}%;"></div>
+          </div>
+        </div>
+
+        <div class="quality-score-row">
+          <div class="qs-item">
+            <div class="qs-val">{{ prediction.predicted_quality }}</div>
+            <div class="qs-lbl">Quality Score</div>
+          </div>
+          <div class="qs-item">
+            <div class="qs-val">{{ prediction.alcohol }}%</div>
+            <div class="qs-lbl">Alcohol</div>
+          </div>
+          <div class="qs-item">
+            <div class="qs-val">{{ prediction.ph }}</div>
+            <div class="qs-lbl">pH Level</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Feature summary -->
+      <div class="card" style="margin-top:1.25rem;">
+        <h3 style="font-family:'Playfair Display',serif;font-size:1.05rem;margin-bottom:0.25rem;">Input Features Used</h3>
+        <p style="font-size:0.78rem;color:var(--text3);margin-bottom:0.75rem;">All 11 physicochemical properties</p>
+        <div class="feat-summary-grid">
+          <div class="feat-summary-item"><div class="fsi-label">Fixed Acidity</div><div class="fsi-value">{{ prediction.fixed_acidity }}</div></div>
+          <div class="feat-summary-item"><div class="fsi-label">Volatile Acidity</div><div class="fsi-value">{{ prediction.volatile_acidity }}</div></div>
+          <div class="feat-summary-item"><div class="fsi-label">Citric Acid</div><div class="fsi-value">{{ prediction.citric_acid }}</div></div>
+          <div class="feat-summary-item"><div class="fsi-label">Residual Sugar</div><div class="fsi-value">{{ prediction.residual_sugar }}</div></div>
+          <div class="feat-summary-item"><div class="fsi-label">Chlorides</div><div class="fsi-value">{{ prediction.chlorides }}</div></div>
+          <div class="feat-summary-item"><div class="fsi-label">Free SO₂</div><div class="fsi-value">{{ prediction.free_sulfur_dioxide }}</div></div>
+          <div class="feat-summary-item"><div class="fsi-label">Total SO₂</div><div class="fsi-value">{{ prediction.total_sulfur_dioxide }}</div></div>
+          <div class="feat-summary-item"><div class="fsi-label">Density</div><div class="fsi-value">{{ prediction.density }}</div></div>
+          <div class="feat-summary-item"><div class="fsi-label">pH</div><div class="fsi-value">{{ prediction.ph }}</div></div>
+          <div class="feat-summary-item"><div class="fsi-label">Sulphates</div><div class="fsi-value">{{ prediction.sulphates }}</div></div>
+          <div class="feat-summary-item"><div class="fsi-label">Alcohol</div><div class="fsi-value">{{ prediction.alcohol }}%</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Probability chart + advice -->
+    <div class="anim anim-2">
+      <div class="proba-card">
+        <h3 style="font-family:'Playfair Display',serif;font-size:1.1rem;margin-bottom:1.25rem;">Grade Probability Distribution</h3>
+        <canvas id="probaChart" height="220"></canvas>
+      </div>
+
+      <!-- Horizontal bar breakdown -->
+      <div class="card" style="margin-top:1.25rem;">
+        <h3 style="font-family:'Playfair Display',serif;font-size:1.05rem;margin-bottom:1rem;">Confidence Breakdown</h3>
+        <div id="probaBreakdown"></div>
+      </div>
+
+      <!-- Interpretation -->
+      <div class="card" style="margin-top:1.25rem; border-color: rgba(201,168,76,0.25);">
+        <h3 style="font-family:'Playfair Display',serif;font-size:1.05rem;margin-bottom:0.75rem;">🔬 Analysis Interpretation</h3>
+        {% if prediction.predicted_grade == 'Excellent' %}
+          <p style="font-size:0.88rem;color:var(--text2);line-height:1.7;">
+            This wine shows <strong style="color:var(--gold)">exceptional characteristics</strong>. The combination of high alcohol content, 
+            balanced acidity, and good sulphate levels contributes to this premium rating. 
+            Suitable for fine dining and aging.
+          </p>
+        {% elif prediction.predicted_grade == 'Good' %}
+          <p style="font-size:0.88rem;color:var(--text2);line-height:1.7;">
+            A <strong style="color:#5ddb8f;">solid quality wine</strong> with well-balanced properties. 
+            Minor improvements in volatile acidity or alcohol content could push it toward 
+            excellent territory. Great for everyday enjoyment.
+          </p>
+        {% elif prediction.predicted_grade == 'Average' %}
+          <p style="font-size:0.88rem;color:var(--text2);line-height:1.7;">
+            This sample falls in the <strong style="color:#ffd700;">average range</strong>. 
+            The wine is acceptable but lacks distinguishing characteristics. 
+            Reducing volatile acidity and increasing alcohol or sulphates may improve quality.
+          </p>
+        {% elif prediction.predicted_grade == 'Below Average' %}
+          <p style="font-size:0.88rem;color:var(--text2);line-height:1.7;">
+            The wine shows <strong style="color:#ffa04d;">below-average quality markers</strong>. 
+            High volatile acidity and/or low alcohol are likely contributing factors. 
+            Fermentation and preservation improvements are recommended.
+          </p>
+        {% else %}
+          <p style="font-size:0.88rem;color:var(--text2);line-height:1.7;">
+            This sample has <strong style="color:#ff6b6b;">significant quality issues</strong>. 
+            Very high volatile acidity indicates possible fermentation problems or spoilage. 
+            A complete review of the production process is advised.
+          </p>
+        {% endif %}
+      </div>
+
+      <div class="action-row">
+        <a href="{% url 'predict' %}" class="btn btn-gold">🍷 Predict Another</a>
+        <a href="{% url 'history' %}" class="btn btn-outline">📋 View History</a>
+        <a href="{% url 'dashboard' %}" class="btn btn-outline">📊 Dashboard</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const probaData = {{ probas|safe }};
+
+// Doughnut chart
+const labels = Object.keys(probaData);
+const values = Object.values(probaData);
+const colors = ['#e74c3c','#e67e22','#f1c40f','#2ecc71','#27ae60'];
+
+new Chart(document.getElementById('probaChart'), {
+  type: 'doughnut',
+  data: {
+    labels: labels,
+    datasets: [{
+      data: values,
+      backgroundColor: colors.map(c => c + '88'),
+      borderColor: colors,
+      borderWidth: 2,
+      hoverOffset: 6,
+    }]
+  },
+  options: {
+    responsive: true,
+    plugins: {
+      legend: {
+        position: 'bottom',
+        labels: { color: '#b8a898', font: { family: 'DM Sans' }, padding: 14, boxWidth: 12 }
+      },
+      tooltip: {
+        callbacks: { label: ctx => ` ${ctx.label}: ${ctx.parsed}%` }
+      }
+    }
+  }
+});
+
+// Horizontal breakdown bars
+const bd = document.getElementById('probaBreakdown');
+labels.forEach((lbl, i) => {
+  const pct = values[i];
+  bd.innerHTML += `
+    <div style="margin-bottom:0.7rem;">
+      <div style="display:flex;justify-content:space-between;font-size:0.78rem;color:var(--text3);margin-bottom:4px;">
+        <span>${lbl}</span><span style="color:${colors[i]};font-weight:600;">${pct}%</span>
+      </div>
+      <div style="height:6px;background:var(--surface2);border-radius:3px;overflow:hidden;">
+        <div style="height:100%;width:${pct}%;background:${colors[i]};border-radius:3px;transition:width 1s ease;"></div>
+      </div>
+    </div>`;
+});
+</script>
+{% endblock %}

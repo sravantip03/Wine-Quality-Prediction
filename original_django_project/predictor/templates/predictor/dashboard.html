@@ -1,0 +1,231 @@
+{% extends 'predictor/base.html' %}
+{% block title %}Dashboard – VinoAI{% endblock %}
+
+{% block extra_head %}
+<style>
+  .dash-grid-top { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.1rem; margin-bottom: 1.5rem; }
+  .kpi-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); padding: 1.4rem 1.5rem;
+    position: relative; overflow: hidden;
+  }
+  .kpi-card::after {
+    content: attr(data-icon); position: absolute; right: 1rem; top: 50%; transform: translateY(-50%);
+    font-size: 2.5rem; opacity: 0.12;
+  }
+  .kpi-value { font-family: 'Playfair Display', serif; font-size: 2.2rem; font-weight: 700; color: var(--gold); line-height: 1; }
+  .kpi-label { font-size: 0.75rem; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 0.4rem; }
+  .kpi-sub   { font-size: 0.8rem; color: var(--text2); margin-top: 0.3rem; }
+
+  .dash-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; }
+  .dash-row-3 { display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; }
+
+  .chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.75rem; }
+  .chart-title { font-family: 'Playfair Display', serif; font-size: 1.1rem; margin-bottom: 1.25rem; }
+
+  /* Feature importance horizontal bars */
+  .feat-imp-item { margin-bottom: 0.75rem; }
+  .feat-imp-label { display: flex; justify-content: space-between; font-size: 0.78rem; color: var(--text2); margin-bottom: 4px; }
+  .feat-imp-bar { height: 8px; background: var(--surface2); border-radius: 4px; overflow: hidden; }
+  .feat-imp-fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--wine), var(--gold)); transition: width 1.2s ease; }
+
+  @media(max-width:1100px) { .dash-row-3 { grid-template-columns: 1fr; } }
+  @media(max-width:900px)  { .dash-row-2 { grid-template-columns: 1fr; } .dash-grid-top { grid-template-columns: 1fr 1fr; } }
+  @media(max-width:520px)  { .dash-grid-top { grid-template-columns: 1fr 1fr; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-wrapper">
+  <div class="section-header anim">
+    <h1>Analytics Dashboard</h1>
+    <div class="gold-line"></div>
+    <p>Model performance, feature insights, and prediction statistics.</p>
+  </div>
+
+  <!-- KPI row -->
+  <div class="dash-grid-top anim anim-1">
+    <div class="kpi-card" data-icon="🎯">
+      <div class="kpi-value">{{ acc_pct }}%</div>
+      <div class="kpi-label">Test Accuracy</div>
+      <div class="kpi-sub">Random Forest · 200 trees</div>
+    </div>
+    <div class="kpi-card" data-icon="🔁">
+      <div class="kpi-value">{{ meta.cv_mean|floatformat:3 }}</div>
+      <div class="kpi-label">Cross-Val Score</div>
+      <div class="kpi-sub">5-Fold · ±{{ meta.cv_std|floatformat:3 }}</div>
+    </div>
+    <div class="kpi-card" data-icon="🗂️">
+      <div class="kpi-value">{{ meta.dataset_stats.total_samples }}</div>
+      <div class="kpi-label">Training Samples</div>
+      <div class="kpi-sub">UCI Red Wine Dataset</div>
+    </div>
+    <div class="kpi-card" data-icon="🍷">
+      <div class="kpi-value">{{ total }}</div>
+      <div class="kpi-label">Predictions Made</div>
+      <div class="kpi-sub">Stored in database</div>
+    </div>
+  </div>
+
+  <!-- Charts row 1 -->
+  <div class="dash-row-2 anim anim-2">
+    <div class="chart-card">
+      <div class="chart-title">Grade Distribution — Predictions</div>
+      <canvas id="gradeBarChart" height="200"></canvas>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Grade Distribution — Pie</div>
+      <canvas id="gradePieChart" height="200"></canvas>
+    </div>
+  </div>
+
+  <!-- Charts row 2 -->
+  <div class="dash-row-3 anim anim-3">
+    <div class="chart-card">
+      <div class="chart-title">Feature Importances (Random Forest)</div>
+      <div id="featImpContainer"></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Avg Confidence by Grade</div>
+      <canvas id="confChart" height="260"></canvas>
+    </div>
+  </div>
+
+  <!-- Dataset stats -->
+  <div class="chart-card anim anim-4">
+    <div class="chart-title">Training Dataset — Quality Distribution</div>
+    <canvas id="datasetChart" height="120"></canvas>
+  </div>
+
+  <!-- Model details table -->
+  <div class="card" style="margin-top:1.5rem;" class="anim anim-4">
+    <h3 style="font-family:'Playfair Display',serif;font-size:1.1rem;margin-bottom:1.25rem;">Model Configuration</h3>
+    <table style="width:100%;border-collapse:collapse;">
+      <thead>
+        <tr>
+          <th style="text-align:left;padding:0.7rem 1rem;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text3);border-bottom:1px solid var(--border);">Parameter</th>
+          <th style="text-align:left;padding:0.7rem 1rem;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text3);border-bottom:1px solid var(--border);">Value</th>
+          <th style="text-align:left;padding:0.7rem 1rem;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text3);border-bottom:1px solid var(--border);">Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in model_params %}
+        <tr>
+          <td style="padding:0.75rem 1rem;font-size:0.85rem;color:var(--gold);font-family:monospace;border-bottom:1px solid rgba(255,255,255,0.04);">{{ row.0 }}</td>
+          <td style="padding:0.75rem 1rem;font-size:0.85rem;color:var(--text);border-bottom:1px solid rgba(255,255,255,0.04);">{{ row.1 }}</td>
+          <td style="padding:0.75rem 1rem;font-size:0.82rem;color:var(--text3);border-bottom:1px solid rgba(255,255,255,0.04);">{{ row.2 }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const gradeData = {{ grade_dist|safe }};
+const featImp   = {{ feat_imp|safe }};
+const confData  = {{ conf_by_grade|safe }};
+const datasetDist = {{ meta.dataset_stats.grade_distribution|safe }};
+
+const grades = Object.keys(gradeData);
+const gradeVals = Object.values(gradeData);
+const colors = ['#e74c3c','#e67e22','#f1c40f','#2ecc71','#27ae60'];
+
+// Grade bar chart
+new Chart(document.getElementById('gradeBarChart'), {
+  type: 'bar',
+  data: {
+    labels: grades,
+    datasets: [{
+      data: gradeVals,
+      backgroundColor: colors.map(c => c + 'aa'),
+      borderColor: colors,
+      borderWidth: 2,
+      borderRadius: 6,
+    }]
+  },
+  options: {
+    responsive: true,
+    plugins: {
+      legend: { display: false },
+      tooltip: { callbacks: { label: ctx => ` ${ctx.parsed.y} predictions` } }
+    },
+    scales: {
+      x: { ticks: { color: '#b8a898', font: { family: 'DM Sans' } }, grid: { color: 'rgba(255,255,255,0.04)' } },
+      y: { ticks: { color: '#b8a898', font: { family: 'DM Sans' }, stepSize: 1 }, grid: { color: 'rgba(255,255,255,0.06)' } }
+    }
+  }
+});
+
+// Grade pie
+new Chart(document.getElementById('gradePieChart'), {
+  type: 'doughnut',
+  data: {
+    labels: grades,
+    datasets: [{
+      data: gradeVals,
+      backgroundColor: colors.map(c => c + '99'),
+      borderColor: colors,
+      borderWidth: 2, hoverOffset: 8,
+    }]
+  },
+  options: {
+    responsive: true,
+    plugins: {
+      legend: { position: 'bottom', labels: { color: '#b8a898', font: { family: 'DM Sans' }, padding: 12, boxWidth: 10 } }
+    }
+  }
+});
+
+// Feature importance horizontal bars
+const sortedFeat = Object.entries(featImp).sort((a,b) => b[1]-a[1]);
+const maxFeat = sortedFeat[0][1];
+const container = document.getElementById('featImpContainer');
+sortedFeat.forEach(([feat, imp], i) => {
+  const pct = ((imp / maxFeat) * 100).toFixed(1);
+  const hue = Math.round(0 + i * 28);
+  container.innerHTML += `
+    <div class="feat-imp-item">
+      <div class="feat-imp-label">
+        <span>${feat}</span>
+        <span style="color:var(--gold);">${(imp*100).toFixed(2)}%</span>
+      </div>
+      <div class="feat-imp-bar">
+        <div class="feat-imp-fill" style="width:${pct}%;"></div>
+      </div>
+    </div>`;
+});
+
+// Confidence radar / bar by grade
+const confVals = grades.map(g => confData[g] || 0);
+new Chart(document.getElementById('confChart'), {
+  type: 'radar',
+  data: {
+    labels: grades,
+    datasets: [{
+      label: 'Avg Confidence %',
+      data: confVals,
+      backgroundColor: 'rgba(201,168,76,0.12)',
+      borderColor: 'rgba(201,168,76,0.8)',
+      pointBackgroundColor: colors,
+      pointBorderColor: '#fff',
+      pointRadius: 5,
+      borderWidth: 2,
+    }]
+  },
+  options: {
+    responsive: true,
+    plugins: {
+      legend: { labels: { color: '#b8a898', font: { family: 'DM Sans' } } }
+    },
+    scales: {
+      r: {
+        ticks: { color: '#7a6a60', backdropColor: 'transparent', font: { family: 'DM Sans', size: 10 } },
+        grid: { color: 'rgba(255,255,255,0.08)' },
+        pointLabels: { color: '#b8a898', font: { family: 'DM Sans', size: 11 } }
+      }
+    }
+  }
+});
+</script>
+{% endblock %}
